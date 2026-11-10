@@ -3,8 +3,6 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f7f2ed"><meta name="description" content="Pesan produk Uwais Food secara online.">
 <link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon-192.png">
-<link rel="canonical" href="https://order.uwaisfood.my.id/">
-<meta property="og:title" content="Uwais Food — Pesan Online"><meta property="og:description" content="Pesan produk Uwais Food secara online."><meta property="og:type" content="website"><meta property="og:url" content="https://order.uwaisfood.my.id/">
 <title>Uwais Food — Pesan Online</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
@@ -15,6 +13,8 @@
 @media(max-width:520px){.wrap{padding:0 14px 108px}.topin{gap:7px;padding:10px 12px}.brand{font-size:16px;gap:8px}.brand-mark{width:38px;height:38px;border-radius:14px;font-size:20px}.brand small{font-size:9px}.actions{gap:5px}.actions button{font-size:10px;padding:8px 10px;min-height:38px}.hero{padding:23px 18px;border-radius:26px;margin:16px 0 22px}.hero:after{right:-6px;top:60%;font-size:82px;opacity:.15}.hero h1{font-size:32px;max-width:80%}.hero .muted{font-size:12px;max-width:78%}.grid{gap:11px}.product{border-radius:21px}.photo,.placeholder{aspect-ratio:1.08}.pbody{padding:11px}.pname{font-size:13px}.desc{font-size:10px;min-height:29px}.price{font-size:15px;margin:9px 0}.pfoot{align-items:center}.pfoot>span{font-size:9px!important}.pfoot button{min-height:37px;padding:7px 10px;font-size:10px}.track-heading{display:block}.track-heading>button{margin-bottom:13px}.track-panel{padding:14px}.track-actions{grid-template-columns:1fr}.track-actions .wa-btn{grid-column:auto}.modal{padding:7px}.modalbox{padding:19px;border-radius:28px 28px 16px 16px}.section h2{font-size:19px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
+
+.stock-state{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:900;letter-spacing:.35px;background:var(--secondary-container);color:var(--green)}.stock-state.soldout{background:#f8deda;color:#9b3028}.stock-state.unset{background:#f4e7d1;color:#80551c}.product.is-soldout{opacity:.82}.product.is-soldout .photo{filter:grayscale(.75)}.stock-note{font-size:12px;color:var(--danger);font-weight:700;margin-top:5px}
 </style></head><body>
 <header class="top"><div class="topin"><div class="brand"><span class="brand-mark">🥐</span><span>Uwais Food<small>Freshly baked, made with care</small></span></div><div class="actions"><button class="secondary track-nav" onclick="showTrackPage()">Lacak</button><button class="secondary" onclick="openAccount()">Akun</button><button onclick="showCart()">Keranjang <span id="cartCount">0</span></button></div></div></header>
 <main class="wrap">
@@ -36,7 +36,7 @@
 <script>
 const API = 'https://script.google.com/macros/s/AKfycbwWcnvTcBJzY4SXIxKY30sPXj31oNapu-nIYPnQWDplQOOb5Xvb8WvT3vcZwGDhVOBpFw/exec';
 const CUSTOMER_WA_CONFIRM_FALLBACK = "Assalamu’alaikum Uwais Food, saya sudah membuat pesanan melalui Customer PWA.\n\n*Konfirmasi Pesanan*\nNomor: {nomor_pesanan}\nNama: {nama_pelanggan}\nWhatsApp: {whatsapp_pelanggan}\nTanggal: {tanggal}\n\n*Pesanan*\n{daftar_produk}\nSubtotal: {subtotal}\nOngkir: {ongkir}\nTotal: {total}\n\nPengiriman: {metode_pengiriman}\nPembayaran: {metode_pembayaran} — {status_pembayaran}\nStatus pesanan: {status_pesanan}\n\nMohon konfirmasi pesanan saya. Terima kasih.";
-const CUSTOMER_WA_COURIER_FALLBACK = "*Detail Kurir / Pengiriman*\nJenis kurir: {jenis_kurir}\nNama layanan/kurir: {nama_kurir}\nKontak kurir: {kontak_kurir}\nDaerah tujuan: {daerah}\nAlamat tujuan: {alamat}\nCatatan pengiriman: {catatan_pengiriman}\nStatus ongkir: {status_ongkir}\nNominal ongkir: {ongkir}\n\nMohon bantu konfirmasi pilihan kurir dan biaya pengirimannya.";
+const CUSTOMER_WA_COURIER_FALLBACK = "*Detail Pengiriman*\nNama penerima: {nama_penerima}\nNo. telepon: {no_telepon_penerima}\nAlamat tujuan: {alamat_tujuan}";
 let catalog={menu:[],tariffs:[],payment:{rekening:[],qrisImage:''},shippingConfig:{autoByArea:false},whatsappTemplates:{}}, cart={}, customer=null, token=localStorage.getItem('uf_customer_token')||'', lastOrder=null, trackedOrders=[];
 const $=id=>document.getElementById(id), rupiah=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
 function normalizeCustomerPhone(raw){let n=String(raw||'').replace(/\D/g,'');if(n.startsWith('0062'))n=n.slice(2);if(n.startsWith('62'))n='0'+n.slice(2);else if(n.startsWith('8'))n='0'+n;return n;}
@@ -48,27 +48,152 @@ function fmtLocalDateTime(v){if(!v)return '';const d=new Date(v);return Number.i
 function renderPoStatus(){const a=catalog.orderAvailability||{open:false,message:'Jadwal PO belum tersedia.'};const b=$('poBanner');if(!b)return;if(a.open&&a.po){b.innerHTML='<b>🟢 Pre-Order sedang dibuka</b><div class="muted" style="margin-top:4px">'+esc(a.po.nama)+' · Tutup '+esc(fmtLocalDateTime(a.po.tutup))+'</div><div style="font-size:12px;margin-top:5px">Silakan pilih produk dan lanjutkan pemesanan.</div>';b.style.borderColor='#b7dfc9';}else{const extra=a.next?'<div class="muted" style="margin-top:5px">PO berikutnya: '+esc(a.next.nama)+' · Mulai '+esc(fmtLocalDateTime(a.next.mulai))+'</div>':'';b.innerHTML='<b>🔒 Pemesanan sedang ditutup</b><div class="muted" style="margin-top:4px">'+esc(a.message||'Belum ada periode PO aktif.')+'</div>'+extra;b.style.borderColor='var(--line)';}const cb=$('checkoutBtn');if(cb){cb.disabled=!poOpen();cb.textContent=poOpen()?'Lanjut checkout · '+($('cartCount').textContent||'0'):'PO sedang ditutup';}}
 async function init(){try{catalog=await api('customer_getCatalog');catalog.orderAvailability=catalog.orderAvailability||{open:false,message:'Jadwal PO belum tersedia.'};$('storeLine').textContent=catalog.storeAddress?catalog.storeName+' · '+catalog.storeAddress:catalog.storeName;renderPoStatus();renderProducts()}catch(e){catalog.orderAvailability={open:false,message:'Jadwal PO belum dapat diverifikasi.'};renderPoStatus();$('products').innerHTML='<div class="panel">Katalog belum dapat dimuat. '+esc(e.message)+'</div>'}}
 async function refreshCatalog(){try{const fresh=await api('customer_getCatalog');catalog=fresh;catalog.shippingConfig=catalog.shippingConfig||{autoByArea:false};renderPoStatus();renderProducts()}catch(e){console.warn('Penyegaran katalog gagal',e.message)}}
-function renderProducts(){const q=$('search').value.toLowerCase();const list=catalog.menu.filter(p=>p.nama.toLowerCase().includes(q)||p.isi.toLowerCase().includes(q));$('menuCount').textContent=list.length+' produk';$('products').innerHTML=list.map((p,i)=>`<article class="product">${p.gambar?`<img class="photo" loading="lazy" src="${esc(p.gambar)}" alt="${esc(p.nama)}" onerror="this.outerHTML='<div class=placeholder>🥐</div>'">`:'<div class="placeholder">🥐</div>'}<div class="pbody"><div class="pname">${esc(p.nama)}</div><div class="desc">${esc(p.isi||'Dibuat dengan bahan pilihan')}</div><div class="price">${rupiah(p.harga)}</div><div class="pfoot"><span class="muted" style="font-size:11px">${poOpen()?'Siap dipesan':'PO ditutup'}</span><button ${poOpen()?'':'disabled'} onclick="addCart(${i},'${encodeURIComponent(p.nama)}')">${poOpen()?'+ Tambah':'Tidak tersedia'}</button></div></div></article>`).join('')||'<div class="panel">Produk tidak ditemukan.</div>'}
-function addCart(i,n){if(!poOpen()){notify('Pemesanan belum dibuka. Silakan cek jadwal PO.',true);return}const p=catalog.menu.find(x=>x.nama===decodeURIComponent(n));if(!p)return;cart[p.nama]=(cart[p.nama]||0)+1;updateCart()}
+function renderProducts(){const q=$('search').value.toLowerCase();const list=catalog.menu.filter(p=>p.nama.toLowerCase().includes(q)||p.isi.toLowerCase().includes(q));$('menuCount').textContent=list.length+' produk';$('products').innerHTML=list.map((p,i)=>{const sold=p.stokStatus==='HABIS'||p.stokStatus==='BELUM_DIATUR';const tag=p.stokStatus==='HABIS'?'<span class="stock-state soldout">HABIS</span>':(p.stokStatus==='BELUM_DIATUR'?'<span class="stock-state unset">STOK BELUM DIATUR</span>':(p.stokDilacak?`<span class="stock-state">Tersedia ${Number(p.stokSisa)||0}</span>`:''));return `<article class="product ${sold?'is-soldout':''}">${p.gambar?`<img class="photo" loading="lazy" src="${esc(p.gambar)}" alt="${esc(p.nama)}" onerror="this.outerHTML='<div class=placeholder>🥐</div>'">`:'<div class="placeholder">🥐</div>'}<div class="pbody"><div class="pname">${esc(p.nama)}</div>${tag}<div class="desc">${esc(p.isi||'Dibuat dengan bahan pilihan')}</div><div class="price">${rupiah(p.harga)}</div><div class="pfoot"><span class="muted" style="font-size:11px">${!poOpen()?'PO ditutup':(p.stokStatus==='HABIS'?'Stok habis':(p.stokStatus==='BELUM_DIATUR'?'Stok belum diatur':'Siap dipesan'))}</span><button ${poOpen()&&!sold?'':'disabled'} onclick="addCart(${i},'${encodeURIComponent(p.nama)}')">${!poOpen()?'PO ditutup':(p.stokStatus==='HABIS'?'Habis':(p.stokStatus==='BELUM_DIATUR'?'Belum tersedia':'+ Tambah'))}</button></div></div></article>`}).join('')||'<div class="panel">Produk tidak ditemukan.</div>'}
+function addCart(i,n){if(!poOpen()){notify('Pemesanan belum dibuka. Silakan cek jadwal PO.',true);return}const p=catalog.menu.find(x=>x.nama===decodeURIComponent(n));if(!p)return;if(p.stokDilacak&&(!p.stokTersedia||Number(cart[p.nama]||0)>=Number(p.stokSisa||0))){notify(p.stokStatus==='BELUM_DIATUR'?'Kapasitas adonan produk ini belum diatur.':'Maaf, stok produk ini sudah habis.',true);return}cart[p.nama]=(cart[p.nama]||0)+1;updateCart();renderProducts()}
 function updateCart(){const n=Object.values(cart).reduce((a,b)=>a+b,0);$('cartCount').textContent=n;if($('checkoutBtn')){$('checkoutBtn').disabled=!poOpen();$('checkoutBtn').textContent=poOpen()?'Lanjut checkout · '+n:'PO sedang ditutup'}}
 function cartRows(){return Object.entries(cart).filter(x=>x[1]>0).map(([nama,qty])=>{const p=catalog.menu.find(x=>x.nama===nama);return p?{...p,qty}:null}).filter(Boolean)}
-function showCart(){if(!poOpen()){notify('Pemesanan sedang ditutup karena tidak ada periode PO yang aktif.',true);return}const items=cartRows();if(!items.length){notify('Keranjang masih kosong.');return}modal(`<button class="close" onclick="closeModal()">Tutup</button><h2>Keranjang</h2>${items.map(p=>`<div class="cartline"><div><b>${esc(p.nama)}</b><div class="muted">${rupiah(p.harga)} / item</div></div><div class="qty"><button class="secondary" onclick="changeQty('${encodeURIComponent(p.nama)}',-1)">−</button><b>${p.qty}</b><button onclick="changeQty('${encodeURIComponent(p.nama)}',1)">+</button></div></div>`).join('')}<div class="row" style="margin:16px 0"><b>Subtotal</b><b class="total">${rupiah(items.reduce((s,p)=>s+p.qty*p.harga,0))}</b></div><button style="width:100%" onclick="checkout()">Lanjut checkout</button>`)}
-function changeQty(n,d){const k=decodeURIComponent(n);cart[k]=Math.max(0,(cart[k]||0)+d);if(!cart[k])delete cart[k];updateCart();showCart()}
+function showCart(){if(!poOpen()){notify('Pemesanan sedang ditutup karena tidak ada periode PO yang aktif.',true);return}const items=cartRows();if(!items.length){notify('Keranjang masih kosong.');return}const invalid=items.filter(p=>p.stokDilacak&&(!p.stokTersedia||p.qty>Number(p.stokSisa||0)));modal(`<button class="close" onclick="closeModal()">Tutup</button><h2>Keranjang</h2>${invalid.length?'<div class="notice error">Ada produk yang stoknya habis atau jumlahnya melebihi sisa kapasitas. Kurangi jumlah atau hapus produk tersebut.</div>':''}${items.map(p=>`<div class="cartline"><div><b>${esc(p.nama)}</b><div class="muted">${rupiah(p.harga)} / item</div>${p.stokDilacak?`<div class="stock-note">${p.stokStatus==='HABIS'?'HABIS':('Sisa kapasitas: '+Number(p.stokSisa||0))}</div>`:''}</div><div class="qty"><button class="secondary" onclick="changeQty('${encodeURIComponent(p.nama)}',-1)">−</button><b>${p.qty}</b><button ${p.stokDilacak&&(p.qty>=Number(p.stokSisa||0)||!p.stokTersedia)?'disabled':''} onclick="changeQty('${encodeURIComponent(p.nama)}',1)">+</button></div></div>`).join('')}<div class="row" style="margin:16px 0"><b>Subtotal</b><b class="total">${rupiah(items.reduce((s,p)=>s+p.qty*p.harga,0))}</b></div><button style="width:100%" ${invalid.length?'disabled':''} onclick="checkout()">Lanjut checkout</button>`)}
+function changeQty(n,d){const k=decodeURIComponent(n),p=catalog.menu.find(x=>x.nama===k);if(d>0&&p&&p.stokDilacak&&(!p.stokTersedia||Number(cart[k]||0)>=Number(p.stokSisa||0))){notify('Jumlah melebihi sisa kapasitas adonan.',true);return}cart[k]=Math.max(0,(cart[k]||0)+d);if(!cart[k])delete cart[k];updateCart();showCart();renderProducts()}
 function modal(body){$('modalRoot').innerHTML=`<div class="modal" onclick="if(event.target===this)closeModal()"><div class="modalbox">${body}</div></div>`}
 function closeModal(){$('modalRoot').innerHTML=''}
-function checkout(){if(!poOpen()){notify('Periode PO sudah ditutup. Pesanan belum dapat dikirim.',true);return}const items=cartRows();modal(`<button class="close" onclick="closeModal()">Tutup</button><h2>Checkout</h2><div class="tabs"><button id="guestTab" class="active" onclick="checkoutMode('guest')">Pesan sebagai tamu</button><button id="loginTab" class="secondary" onclick="checkoutMode('account')">Gunakan akun</button></div><div id="accountHint" class="muted">${customer?'Login sebagai '+esc(customer.nama):'Isi data pemesan di bawah.'}</div><div class="field"><label>Nama pemesan</label><input id="coNama" value="${esc(customer?.nama||'')}" placeholder="Nama lengkap" autocomplete="name"></div><div class="field"><label>Nomor WhatsApp</label><input id="coHp" value="${esc(customer?.hp||'')}" inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel"></div><div class="field"><label>Metode pengiriman</label><select id="shipMode" onchange="shipFields()"><option value="Pickup">Pickup / Ambil sendiri</option><option value="Kurir">Via Kurir</option></select></div><div id="shipExtra" class="shipping-block hidden"><div class="shipping-help">Alamat lengkap diperlukan agar toko dapat mengatur pengiriman. Nama dan nomor kurir boleh dilengkapi sekarang atau menyusul melalui WhatsApp.</div><div class="field"><label>Jenis kurir</label><select id="courierChoice" onchange="courierChoiceChanged()"><option value="Toko">Kurir Uwais Food</option><option value="Pihak Ketiga">Kurir pilihan saya sendiri</option></select><div class="muted" style="font-size:12px">Anda boleh menggunakan kurir Uwais Food atau mengatur kurir sendiri.</div></div><div class="field"><label>Nama kurir / layanan (opsional)</label><input id="courierName" placeholder="Contoh: GoSend, GrabExpress, kurir pribadi"></div><div class="field"><label>Nomor kontak kurir (opsional)</label><input id="courierContact" inputmode="tel" placeholder="08xxxxxxxxxx"></div><div class="field"><label>Catatan pengiriman (opsional)</label><input id="deliveryNote" placeholder="Contoh: hubungi sebelum tiba"></div><div class="field"><label>Daerah / kecamatan (opsional)</label><input id="shipArea" placeholder="Contoh: Batu 9, Tanjungpinang" oninput="updateShipFee()"></div><div class="field"><label>Alamat lengkap tujuan kurir *</label><textarea id="shipAddress" placeholder="Nama jalan, nomor rumah, RT/RW, patokan"></textarea></div><div class="shipping-help" id="feeLine">Ongkir akan dikonfirmasi melalui WhatsApp setelah pesanan diterima.</div></div><div class="field"><label>Metode pembayaran</label><select id="payMode" onchange="paymentInfo()"><option value="QRIS/Transfer">QRIS / Transfer</option><option value="COD">Bayar saat pickup / kurir (COD)</option></select></div><div id="paymentInfo" class="muted"></div><div class="field"><label>Catatan pesanan (opsional)</label><textarea id="coNote" placeholder="Contoh: tanpa kartu ucapan"></textarea></div><div class="row"><b>Total sementara</b><b id="coTotal" class="total">${rupiah(items.reduce((s,p)=>s+p.qty*p.harga,0))}</b></div><div class="muted" id="coTotalHint" style="font-size:12px;margin-top:4px">Total belum termasuk ongkir jika memilih Via Kurir.</div><button style="width:100%;margin-top:14px" onclick="submitOrder()">Kirim pesanan</button><div id="coError"></div>`);paymentInfo()}
+function checkout(){
+  if(!poOpen()){notify('Periode PO sudah ditutup. Pesanan belum dapat dikirim.',true);return}
+  const items=cartRows();
+  const tariffOptions=(catalog.tariffs||[]).map(t=>`<option value="${esc(t.id)}">${esc(t.area)} — ${rupiah(t.ongkir)}</option>`).join('');
+  const hasTariffs=(catalog.tariffs||[]).length>0;
+  modal(`<button class="close" onclick="closeModal()">Tutup</button>
+    <h2>Checkout</h2>
+    <div class="tabs"><button id="guestTab" class="active" onclick="checkoutMode('guest')">Pesan sebagai tamu</button><button id="loginTab" class="secondary" onclick="checkoutMode('account')">Gunakan akun</button></div>
+    <div id="accountHint" class="muted">${customer?'Login sebagai '+esc(customer.nama):'Isi data pemesan di bawah.'}</div>
+    <div class="field"><label>Nama penerima / pemesan *</label><input id="coNama" value="${esc(customer?.nama||'')}" placeholder="Nama lengkap" autocomplete="name"></div>
+    <div class="field"><label>Nomor WhatsApp penerima *</label><input id="coHp" value="${esc(customer?.hp||'')}" inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel"></div>
+    <div class="field"><label>Metode pengiriman</label><select id="shipMode" onchange="shipFields()"><option value="Pickup">Pickup / Ambil sendiri</option><option value="Kurir">Via Kurir</option></select></div>
+    <div id="shipExtra" class="shipping-block hidden">
+      <div class="shipping-help">Nama dan nomor telepon penerima diambil dari identitas checkout. Alamat tujuan wajib diisi agar pesanan dapat disiapkan.</div>
+      <div class="field"><label>Jenis kurir</label><select id="courierChoice" onchange="courierChoiceChanged()"><option value="Toko">Kurir Uwais Food</option><option value="Pihak Ketiga">Kurir Sendiri</option></select></div>
+      <div id="courierStoreFields">
+        <div class="field"><label>Daerah tujuan / tarif ongkir *</label>
+          <select id="shipArea" onchange="updateShipFee()">
+            <option value="">Pilih daerah tujuan</option>
+            ${tariffOptions}
+            <option value="__OTHER__">Daerah lain / tidak tercantum</option>
+          </select>
+          ${!hasTariffs?'<div class="muted" style="font-size:12px">Daftar tarif belum tersedia. Pilih daerah lain untuk meminta konfirmasi ongkir.</div>':''}
+        </div>
+        <div class="field hidden" id="shipAreaOtherWrap"><label>Nama daerah tujuan *</label><input id="shipAreaOther" placeholder="Contoh: Kecamatan / kelurahan lain" oninput="updateShipFee()"></div>
+        <div class="shipping-help">Tarif ditampilkan sesuai daftar aktif pada Pengaturan → Ongkos Kirim. Apabila perhitungan otomatis OFF, nominal final akan dikonfirmasi melalui WhatsApp.</div>
+      </div>
+      <div id="courierOwnFields" class="hidden">
+        <div class="field"><label>Nama layanan kurir *</label><input id="courierName" placeholder="Contoh: GoSend, GrabExpress, kurir pribadi"></div>
+        <div class="shipping-help">Anda mengatur kurir sendiri. Uwais Food tidak menghitung atau menambahkan tarif kurir ke total produk.</div>
+      </div>
+      <div class="field"><label>Alamat lengkap tujuan *</label><textarea id="shipAddress" placeholder="Nama jalan, nomor rumah, RT/RW, patokan"></textarea></div>
+      <div class="shipping-help" id="feeLine">Pilih jenis kurir dan daerah tujuan untuk melihat ketentuan ongkir.</div>
+    </div>
+    <div class="field"><label>Metode pembayaran</label><select id="payMode" onchange="paymentInfo()"><option value="QRIS/Transfer">QRIS / Transfer</option><option value="COD">Bayar saat pickup / kurir (COD)</option></select></div>
+    <div id="paymentInfo" class="muted"></div>
+    <div class="field"><label>Catatan pesanan (opsional)</label><textarea id="coNote" placeholder="Contoh: tanpa kartu ucapan"></textarea></div>
+    <div class="row"><b>Total sementara</b><b id="coTotal" class="total">${rupiah(items.reduce((s,p)=>s+p.qty*p.harga,0))}</b></div>
+    <div class="muted" id="coTotalHint" style="font-size:12px;margin-top:4px">Total produk sebelum ongkir.</div>
+    <button style="width:100%;margin-top:14px" onclick="submitOrder()">Kirim pesanan</button><div id="coError"></div>`);
+  paymentInfo();
+}
 
 let coMode='guest';function checkoutMode(m){coMode=m;$('guestTab').className=m==='guest'?'':'secondary';$('loginTab').className=m==='account'?'':'secondary';if(m==='account'&&!customer){openAccount();return}if(customer){$('coNama').value=customer.nama;$('coHp').value=customer.hp}}
-function shipFields(){$('shipExtra').classList.toggle('hidden',$('shipMode').value!=='Kurir');updateShipFee()}
-function courierChoiceChanged(){const own=$('courierChoice')?.value==='Pihak Ketiga';const name=$('courierName');if(name)name.placeholder=own?'Nama kurir pilihan Anda (opsional)':'Nama kurir Uwais Food (opsional)';updateShipFee()}
-function normalizeAreaKey(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ')}
-function updateShipFee(){const area=String($('shipArea')?.value||'').trim();const t=catalog.tariffs.find(x=>normalizeAreaKey(x.area)===normalizeAreaKey(area));const automatic=!!catalog.shippingConfig?.autoByArea&&!!t&&$('courierChoice')?.value!=='Pihak Ketiga';const fee=automatic?Number(t.ongkir)||0:0;if($('feeLine'))$('feeLine').textContent=automatic?`Estimasi ongkir otomatis ${rupiah(fee)} · ${Number(t.jarakKm)||0} km. Admin akan mengonfirmasi kembali jika diperlukan.`:'Ongkir belum ditambahkan ke total. Uwais Food akan menginformasikan ongkir melalui WhatsApp. Daerah boleh dikosongkan.';const sub=cartRows().reduce((s,p)=>s+p.qty*p.harga,0);if($('coTotal'))$('coTotal').textContent=rupiah(sub+fee);if($('coTotalHint'))$('coTotalHint').textContent=automatic?'Total sementara termasuk estimasi ongkir daerah.':'Total sementara belum termasuk ongkir.'}
+function shipFields(){
+  const active=$('shipMode')?.value==='Kurir';
+  $('shipExtra')?.classList.toggle('hidden',!active);
+  if(active)courierChoiceChanged();else updateShipFee();
+}
+function courierChoiceChanged(){
+  const own=$('courierChoice')?.value==='Pihak Ketiga';
+  $('courierStoreFields')?.classList.toggle('hidden',own);
+  $('courierOwnFields')?.classList.toggle('hidden',!own);
+  const name=$('courierName');
+  if(name)name.required=own;
+  updateShipFee();
+}
+function selectedUwaisTariff(){
+  const id=String($('shipArea')?.value||'');
+  return (catalog.tariffs||[]).find(t=>String(t.id)===id)||null;
+}
+function selectedShippingArea(){
+  const id=String($('shipArea')?.value||'');
+  if(id==='__OTHER__')return String($('shipAreaOther')?.value||'').trim();
+  const t=selectedUwaisTariff();
+  return t?String(t.area||'').trim():'';
+}
+function updateShipFee(){
+  const own=$('courierChoice')?.value==='Pihak Ketiga';
+  const select=$('shipArea');
+  const other=String(select?.value||'')==='__OTHER__';
+  $('shipAreaOtherWrap')?.classList.toggle('hidden',own||!other);
+  const t=selectedUwaisTariff();
+  const automatic=!own&&!!catalog.shippingConfig?.autoByArea&&!!t;
+  const fee=automatic?Math.max(0,Number(t.ongkir)||0):0;
+  const sub=cartRows().reduce((sum,p)=>sum+p.qty*p.harga,0);
+  if(own){
+    if($('feeLine'))$('feeLine').textContent='Kurir diatur sendiri oleh customer. Ongkir kurir dibayar/diatur langsung dengan penyedia kurir dan tidak masuk tagihan Uwais Food.';
+    if($('coTotal'))$('coTotal').textContent=rupiah(sub);
+    if($('coTotalHint'))$('coTotalHint').textContent='Total hanya produk; biaya kurir sendiri tidak termasuk.';
+    return;
+  }
+  if(automatic){
+    if($('feeLine'))$('feeLine').textContent=`Ongkir ${esc(t.area)}: ${rupiah(fee)} · ${Number(t.jarakKm)||0} km. Tarif otomatis aktif dan akan dicatat pada pesanan.`;
+  }else if(t){
+    if($('feeLine'))$('feeLine').textContent=`Tarif referensi ${esc(t.area)}: ${rupiah(t.ongkir)}. Penghitungan otomatis OFF; nominal final akan dikonfirmasi melalui WhatsApp.`;
+  }else if(other){
+    if($('feeLine'))$('feeLine').textContent='Daerah tidak tercantum. Ongkir akan dikonfirmasi melalui WhatsApp.';
+  }else{
+    if($('feeLine'))$('feeLine').textContent='Pilih daerah tujuan dari daftar ongkir Uwais Food.';
+  }
+  if($('coTotal'))$('coTotal').textContent=rupiah(sub+fee);
+  if($('coTotalHint'))$('coTotalHint').textContent=automatic?'Total sementara termasuk ongkir berdasarkan tarif daerah.':'Total sementara belum termasuk ongkir final.';
+}
 function pendingCheckoutKey(payload){const signature=JSON.stringify({hp:payload.hp,items:payload.items,shipping:payload.shipping,payment:payload.payment,note:payload.note});let old=null;try{old=JSON.parse(localStorage.getItem('uf_customer_pending_checkout')||'null')}catch(_){}if(old&&old.signature===signature&&old.key)return old.key;const key='UF'+Date.now().toString(36)+Math.random().toString(36).slice(2,12);localStorage.setItem('uf_customer_pending_checkout',JSON.stringify({key,signature}));return key}
-async function submitOrder(){const err=$('coError');err.textContent='';try{const hp=normalizeCustomerPhone($('coHp').value),nama=$('coNama').value.trim();$('coHp').value=hp;const shipping={metode:$('shipMode').value,area:$('shipArea')?.value||'',alamat:$('shipAddress')?.value||'',pilihanKurir:$('courierChoice')?.value||'Toko',namaKurir:$('courierName')?.value||'',kontakKurir:$('courierContact')?.value||'',catatanPengiriman:$('deliveryNote')?.value||''};const items=cartRows().map(p=>({nama:p.nama,qty:p.qty}));const body={nama,hp,items,shipping,payment:$('payMode').value,note:$('coNote').value};body.clientRequestId=pendingCheckoutKey(body);const result=await api('customer_createOrder',[body,coMode==='account'?(token||''):'']);localStorage.removeItem('uf_customer_pending_checkout');lastOrder={...result,hp,items:result.items||items};cart={};updateCart();closeModal();showOrderSuccess(result,hp)}catch(e){err.className='notice error';err.textContent=e.message}}
+async function submitOrder(){
+  const err=$('coError');err.textContent='';
+  try{
+    const hp=normalizeCustomerPhone($('coHp').value),nama=$('coNama').value.trim();
+    if(!nama)throw new Error('Nama penerima wajib diisi.');
+    $('coHp').value=hp;
+    const mode=$('shipMode').value;
+    const own=mode==='Kurir'&&$('courierChoice')?.value==='Pihak Ketiga';
+    const address=String($('shipAddress')?.value||'').trim();
+    if(mode==='Kurir'&&!address)throw new Error('Alamat lengkap tujuan wajib diisi.');
+    let area='';
+    if(mode==='Kurir'&&!own){
+      area=selectedShippingArea();
+      if(!$('shipArea')?.value)throw new Error('Pilih daerah tujuan dari daftar ongkir Uwais Food.');
+      if($('shipArea').value==='__OTHER__'&&!area)throw new Error('Isi nama daerah tujuan yang belum tercantum.');
+    }
+    const courierName=own?String($('courierName')?.value||'').trim():'';
+    if(own&&!courierName)throw new Error('Nama layanan kurir pilihan Anda wajib diisi.');
+    const shipping={
+      metode:mode,
+      pilihanKurir:own?'Pihak Ketiga':'Toko',
+      area:area,
+      areaPilihanLain:!own&&String($('shipArea')?.value||'')==='__OTHER__',
+      alamat:address,
+      namaKurir:courierName,
+      kontakKurir:'',
+      catatanPengiriman:''
+    };
+    const selected=cartRows();
+    const blocked=selected.find(p=>p.stokDilacak&&(!p.stokTersedia||p.qty>Number(p.stokSisa||0)));
+    if(blocked)throw new Error(blocked.nama+' sudah HABIS atau jumlah melebihi sisa kapasitas. Muat ulang katalog dan perbarui keranjang.');
+    const items=selected.map(p=>({nama:p.nama,qty:p.qty}));
+    const body={nama,hp,items,shipping,payment:$('payMode').value,note:$('coNote').value};
+    body.clientRequestId=pendingCheckoutKey(body);
+    const result=await api('customer_createOrder',[body,coMode==='account'?(token||''):'']);
+    localStorage.removeItem('uf_customer_pending_checkout');
+    lastOrder={...result,hp,items:result.items||items};cart={};updateCart();closeModal();showOrderSuccess(result,hp);
+  }catch(e){err.className='notice error';err.textContent=e.message;}
+}
 
 function showOrderSuccess(o,hp){
   const payStatus=o.payment==='COD'?'COD · Bayar saat pesanan diterima':'Belum Bayar';
-  modal(`<button class="close" onclick="closeModal()">Tutup</button><h2>Pesanan berhasil dikirim!</h2><div class="notice">Pesanan Anda sudah tercatat di Uwais Food.</div><div class="muted">Kode pesanan</div><div style="font-size:24px;font-weight:900;letter-spacing:1px;margin:4px 0 12px">${esc(o.id)}</div><div class="row"><span>Subtotal</span><b>${rupiah(o.subtotal)}</b></div><div class="row"><span>Ongkir</span><b>${o.ongkirPending?'Akan dikonfirmasi via WhatsApp':rupiah(o.ongkir)}</b></div><div class="row"><b>${o.ongkirPending?'Total sementara':'Total'}</b><b class="total">${o.total==null?'Belum termasuk ongkir':rupiah(o.total)}</b></div><div class="pay-instructions"><div class="muted">Status pembayaran</div><div class="pay-status-big">${esc(payStatus)}</div><div class="muted">Anda dapat mengirim konfirmasi pesanan melalui WhatsApp dan mengelola status pembayaran.</div></div><button class="wa-btn" style="width:100%;background:#1f9d62" onclick="notifyWhatsApp('${esc(o.id)}','${esc(hp)}')">Beritahu kami di WhatsApp</button><button class="secondary" style="width:100%;margin-top:9px" onclick="openPaymentStatus('${esc(o.id)}','${esc(hp)}','${esc(o.payment)}','${esc(payStatus)}',false)">Status Bayar</button><button class="secondary" style="width:100%;margin-top:9px" onclick="goTrackOrder('${esc(o.id)}','${esc(hp)}')">Lacak pesanan</button><button class="ghost" style="width:100%;margin-top:6px" onclick="closeModal()">Selesai</button>`);
+  modal(`<button class="close" onclick="closeModal()">Tutup</button><h2>Pesanan berhasil dikirim!</h2><div class="notice">Pesanan Anda sudah tercatat di Uwais Food.</div><div class="muted">Kode pesanan</div><div style="font-size:24px;font-weight:900;letter-spacing:1px;margin:4px 0 12px">${esc(o.id)}</div><div class="row"><span>Subtotal</span><b>${rupiah(o.subtotal)}</b></div><div class="row"><span>Ongkir</span><b>${o.jenisKurir==='Pihak Ketiga'?'Diatur langsung dengan kurir':(o.ongkirPending?'Akan dikonfirmasi via WhatsApp':rupiah(o.ongkir))}</b></div><div class="row"><b>${o.ongkirPending?'Total sementara':'Total'}</b><b class="total">${o.total==null?'Belum termasuk ongkir':rupiah(o.total)}</b></div><div class="pay-instructions"><div class="muted">Status pembayaran</div><div class="pay-status-big">${esc(payStatus)}</div><div class="muted">Anda dapat mengirim konfirmasi pesanan melalui WhatsApp dan mengelola status pembayaran.</div></div><button class="wa-btn" style="width:100%;background:#1f9d62" onclick="notifyWhatsApp('${esc(o.id)}','${esc(hp)}')">Beritahu kami di WhatsApp</button><button class="secondary" style="width:100%;margin-top:9px" onclick="openPaymentStatus('${esc(o.id)}','${esc(hp)}','${esc(o.payment)}','${esc(payStatus)}',false)">Status Bayar</button><button class="secondary" style="width:100%;margin-top:9px" onclick="goTrackOrder('${esc(o.id)}','${esc(hp)}')">Lacak pesanan</button><button class="ghost" style="width:100%;margin-top:6px" onclick="closeModal()">Selesai</button>`);
 }
 function goTrackOrder(id,hp){closeModal();showTrackPage();$('trackHp').value=hp||'';trackOrder()}
 function paymentInstructionHtml(){const p=catalog.payment||{};const banks=(p.rekening||[]).map(r=>`<div><b>${esc(r.bank)}</b> · ${esc(r.noRek)}<br><span class="muted">a.n. ${esc(r.atasNama)}</span></div>`).join('<hr style="border:0;border-top:1px solid var(--line);margin:8px 0">');return `${banks||'<div>Informasi rekening belum tersedia. Silakan hubungi Uwais Food melalui WhatsApp.</div>'}${p.qrisImage?`<img class="payimg" src="${p.qrisImage}" alt="QRIS Uwais Food">`:''}`}
@@ -92,15 +217,15 @@ function customerWaValues(o,hp,id){
   const items=Array.isArray(o.items)?o.items.map(x=>`• ${Number(x.qty)||1} × ${x.nama||x.item||'Produk'} — ${rupiah((Number(x.qty)||1)*(Number(x.harga)||0))}`).join('\n'):'-';
   const feePending=!!(o.ongkirPending||o.total==null);
   const subtotal=Number(o.subtotal!=null?o.subtotal:(Array.isArray(o.items)?o.items.reduce((s,x)=>s+(Number(x.qty)||1)*(Number(x.harga)||0),0):0));
-  const shippingLabel=isCourier?'Via Kurir':'Pickup / ambil sendiri';
+  const ownCourier=o.jenisKurir==='Pihak Ketiga';
+  const shippingLabel=isCourier?(ownCourier?'Kurir Sendiri':'Kurir Uwais Food'):'Pickup / ambil sendiri';
   return {
     nama_toko:catalog.storeName||'Uwais Food',nama_pelanggan:o.nama||customer?.nama||'Pelanggan',whatsapp_pelanggan:hp||o.hp||'-',
     nomor_pesanan:id||o.id||'-',tanggal:o.waktu||new Date().toLocaleString('id-ID'),daftar_produk:items||'-',subtotal:rupiah(subtotal),
-    ongkir:feePending?'Menunggu konfirmasi':rupiah(o.ongkir||0),total:feePending?'Belum termasuk ongkir':rupiah(o.total),
+    ongkir:ownCourier?'Diatur langsung oleh customer':(feePending?'Menunggu konfirmasi':rupiah(o.ongkir||0)),total:feePending?'Belum termasuk ongkir':rupiah(o.total),
     metode_pengiriman:shippingLabel,metode_pembayaran:payMethod,status_pembayaran:payStatus,status_pesanan:o.status||'Baru',
-    jenis_kurir:o.jenisKurir==='Pihak Ketiga'?'Kurir pilihan customer':(o.jenisKurir|| (isCourier?'Kurir Uwais Food':'-')),
-    nama_kurir:o.namaKurir||'Belum ditentukan',kontak_kurir:o.kontakKurir||'Belum diisi',daerah:o.daerah||o.area||'-',alamat:o.alamat||'Alamat tujuan sudah tercatat pada pesanan; customer dapat melengkapinya bila diperlukan.',
-    catatan_pengiriman:o.catatanPengiriman||'Tidak ada',status_ongkir:o.ongkirStatus||o.statusOngkir||(isCourier?'Menunggu konfirmasi':'Tidak berlaku'),footer:catalog.storeFooter||'Terima kasih.'
+    nama_penerima:o.nama||customer?.nama||'Pelanggan',no_telepon_penerima:hp||o.hp||'-',alamat_tujuan:o.alamat||'-',
+    footer:catalog.storeFooter||'Terima kasih.'
   };
 }
 function applyCustomerWaTemplate(template,values){return String(template||'').replace(/\{([a-z0-9_]+)\}/gi,(m,k)=>Object.prototype.hasOwnProperty.call(values,k.toLowerCase())?String(values[k.toLowerCase()]??''):m).trim()}
@@ -121,7 +246,7 @@ function renderTrackedOrderCard(o,hp){
   const isCOD=String(o.metodeBayar||'').toUpperCase()==='COD';
   const statusPay=isCOD?(o.bayar==='Lunas'?'Lunas · dibayar saat COD':'COD · Bayar saat diterima'):(o.bayar||'Belum Bayar');
   const items=(o.items||[]).map(p=>`<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${Number(p.qty)||0} × ${esc(p.nama)}</span><b>${rupiah((Number(p.qty)||0)*(Number(p.harga)||0))}</b></div>`).join('');
-  return `<article class="track-result-card"><div class="row"><b>Pesanan ${esc(o.id)}</b><span class="status">${esc(o.status||'Baru')}</span></div><div class="muted" style="margin:6px 0 14px">${esc(o.waktu||'-')}</div>${items}<div class="row" style="padding-top:10px"><span>Ongkir</span><b>${o.ongkirPending||o.ongkir==null?'Menunggu konfirmasi':rupiah(o.ongkir)}</b></div><div class="row"><b>${o.ongkirPending?'Total sementara':'Total'}</b><b class="total">${o.total==null?'Belum termasuk ongkir':rupiah(o.total)}</b></div><div class="pay-instructions"><div class="muted">Status pembayaran</div><div class="pay-status-big">${esc(statusPay)}</div><div class="muted">Metode: ${esc(o.metodeBayar||'-')} · Pengiriman: ${esc(o.metodeKirim||'-')} ${o.jenisKurir==='Pihak Ketiga'?'· Kurir pilihan customer':''}${o.namaKurir?' · '+esc(o.namaKurir):''}</div>${o.kontakKurir?`<div class="muted">Kontak kurir: ${esc(o.kontakKurir)}</div>`:''}${o.catatanPengiriman?`<div class="muted">Catatan pengiriman: ${esc(o.catatanPengiriman)}</div>`:''}${o.ongkirPending?'<div class="muted" style="margin-top:6px">Ongkir akan diinformasikan melalui WhatsApp.</div>':''}</div>${o.history&&o.history.length?`<div style="margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:12px"><b>Riwayat pesanan</b>${o.history.map(h=>`<div class="muted" style="padding:5px 0;border-bottom:1px solid var(--line)">${esc(h.waktu)} · ${esc(h.aktivitas)}${h.status?' → '+esc(h.status):''}</div>`).join('')}</div>`:''}<div class="track-actions"><button class="wa-btn" onclick="notifyWhatsApp('${esc(o.id)}','${esc(hp)}')">Beritahu kami di WhatsApp</button><button class="secondary" onclick="openPaymentStatus('${esc(o.id)}','${esc(hp)}','${esc(o.metodeBayar)}','${esc(o.bayar)}',${o.buktiTerkirim?'true':'false'})">Status Bayar</button></div></article>`;
+  return `<article class="track-result-card"><div class="row"><b>Pesanan ${esc(o.id)}</b><span class="status">${esc(o.status||'Baru')}</span></div><div class="muted" style="margin:6px 0 14px">${esc(o.waktu||'-')}</div>${items}<div class="row" style="padding-top:10px"><span>Ongkir</span><b>${o.jenisKurir==='Pihak Ketiga'?'Diatur langsung dengan kurir':(o.ongkirPending||o.ongkir==null?'Menunggu konfirmasi':rupiah(o.ongkir))}</b></div><div class="row"><b>${o.ongkirPending?'Total sementara':'Total'}</b><b class="total">${o.total==null?'Belum termasuk ongkir':rupiah(o.total)}</b></div><div class="pay-instructions"><div class="muted">Status pembayaran</div><div class="pay-status-big">${esc(statusPay)}</div><div class="muted">Metode: ${esc(o.metodeBayar||'-')} · Pengiriman: ${esc(o.metodeKirim||'-')} ${o.jenisKurir==='Pihak Ketiga'?'· Kurir sendiri'+(o.namaKurir?' ('+esc(o.namaKurir)+')':''):'· Kurir Uwais Food'}</div>${o.ongkirPending?'<div class="muted" style="margin-top:6px">Ongkir akan diinformasikan melalui WhatsApp.</div>':''}</div>${o.history&&o.history.length?`<div style="margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:12px"><b>Riwayat pesanan</b>${o.history.map(h=>`<div class="muted" style="padding:5px 0;border-bottom:1px solid var(--line)">${esc(h.waktu)} · ${esc(h.aktivitas)}${h.status?' → '+esc(h.status):''}</div>`).join('')}</div>`:''}<div class="track-actions"><button class="wa-btn" onclick="notifyWhatsApp('${esc(o.id)}','${esc(hp)}')">Beritahu kami di WhatsApp</button><button class="secondary" onclick="openPaymentStatus('${esc(o.id)}','${esc(hp)}','${esc(o.metodeBayar)}','${esc(o.bayar)}',${o.buktiTerkirim?'true':'false'})">Status Bayar</button></div></article>`;
 }
 async function trackOrder(){
   const out=$('trackResult'), hp=normalizeCustomerPhone($('trackHp').value);$('trackHp').value=hp;
