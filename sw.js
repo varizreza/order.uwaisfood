@@ -1,6 +1,6 @@
-/* UWAIS FOOD CUSTOMER PWA v11.0.6 — mobile fit + cache refresh */
+/* UWAIS FOOD CUSTOMER PWA v11.0.8 — seasonal PO */
 const CACHE_PREFIX = 'uwais-food-shell-';
-const CACHE_NAME = CACHE_PREFIX + 'v11-0-6-20261113-mobile-fit';
+const CACHE_NAME = CACHE_PREFIX + 'v11-0-8-20261116-seasonal-po';
 const SHELL_FILES = [
   './',
   './index.html',
