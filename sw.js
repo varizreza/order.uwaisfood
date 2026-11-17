@@ -1,6 +1,6 @@
-/* UWAIS FOOD CUSTOMER PWA v11.11.2 — Multi PO selection + dynamic categories */
+/* UWAIS FOOD CUSTOMER PWA v11.11.3 — PO chooser moved to hero + processing dialog */
 const CACHE_PREFIX = 'uwais-food-shell-';
-const CACHE_NAME = CACHE_PREFIX + 'v11-11-2-20261117-multi-po-selection';
+const CACHE_NAME = CACHE_PREFIX + 'v11-11-3-20261117-po-chooser-hero';
 const SHELL_FILES = [
   './',
   './index.html',
