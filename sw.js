@@ -1,6 +1,6 @@
-/* UWAIS FOOD CUSTOMER PWA v11.0.8 — seasonal PO */
+/* UWAIS FOOD CUSTOMER PWA v11.11.2 — Multi PO selection + dynamic categories */
 const CACHE_PREFIX = 'uwais-food-shell-';
-const CACHE_NAME = CACHE_PREFIX + 'v11-0-8-20261116-seasonal-po';
+const CACHE_NAME = CACHE_PREFIX + 'v11-11-2-20261117-multi-po-selection';
 const SHELL_FILES = [
   './',
   './index.html',
