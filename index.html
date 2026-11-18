@@ -79,7 +79,80 @@ const CUSTOMER_WA_COURIER_FALLBACK = "*Detail Pengiriman*\nNama penerima: {nama_
 let catalog={menu:[],categories:[],tariffs:[],openPOs:[],selectedPO:null,payment:{rekening:[],qrisImage:'',qrisAvailable:false},shippingConfig:{autoByArea:false},whatsappTemplates:{}}, paymentQRISLoaded=false, paymentQRISLoading=null, cart={}, customer=null, token=localStorage.getItem('uf_customer_token')||'', lastOrder=null, trackedOrders=[], activeCategoryId='all', selectedPOId='', isSelectingPO=false;
 const $=id=>document.getElementById(id), rupiah=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
 function normalizeCustomerPhone(raw){let n=String(raw||'').replace(/\D/g,'');if(n.startsWith('0062'))n=n.slice(2);if(n.startsWith('62'))n='0'+n.slice(2);else if(n.startsWith('8'))n='0'+n;return n;}
-async function api(action,args=[]){const res=await fetch(API,{method:'POST',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,args}),redirect:'follow'});const j=await res.json();if(!j.ok)throw new Error(j.error||'Permintaan gagal');return j.data}
+async function api(action, args = []) {
+  const controller = typeof AbortController !== 'undefined'
+    ? new AbortController()
+    : null;
+
+  const timeout = controller
+    ? setTimeout(() => controller.abort(), 45000)
+    : null;
+
+  try {
+    const options = {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify({
+        action: action,
+        args: args
+      }),
+      redirect: 'follow'
+    };
+
+    if (controller) options.signal = controller.signal;
+
+    const response = await fetch(API, options);
+    const raw = await response.text();
+
+    let result;
+
+    try {
+      result = JSON.parse(raw);
+    } catch (_) {
+      throw new Error(
+        'Server tidak memberikan respons JSON yang valid. HTTP ' +
+        response.status + '. Periksa URL deployment Apps Script.'
+      );
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Server mengalami kesalahan HTTP ' + response.status
+      );
+    }
+
+    if (!result || result.ok !== true) {
+      throw new Error(
+        result && result.error
+          ? result.error
+          : 'Permintaan ke server gagal.'
+      );
+    }
+
+    return result.data;
+
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      throw new Error(
+        'Permintaan melebihi batas waktu 45 detik. Periksa koneksi internet dan coba lagi.'
+      );
+    }
+
+    if (error instanceof TypeError) {
+      throw new Error(
+        'Tidak dapat terhubung ke server Uwais Food. Periksa koneksi internet atau URL API.'
+      );
+    }
+
+    throw error;
+
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function customerFriendlyMessage(value){const raw=String(value&&value.message?value.message:(value||'')).trim();if(/stok|adonan|kapasitas|persediaan|inventory|bahan baku/i.test(raw))return 'Stok tidak cukup. Silakan kurangi jumlah pesanan atau pilih produk lain.';return raw||'Terjadi kesalahan. Silakan coba kembali.';}
 function notify(message,bad=false){let host=document.getElementById('ufToastHost');if(!host){host=document.createElement('div');host.id='ufToastHost';host.setAttribute('aria-live','polite');host.setAttribute('aria-relevant','additions');document.body.appendChild(host);}const duration=bad?5600:4300;const toast=document.createElement('div');toast.className='uf-toast'+(bad?' is-error':'');toast.setAttribute('role',bad?'alert':'status');toast.style.setProperty('--uf-toast-duration',duration+'ms');const icon=document.createElement('span');icon.className='uf-toast-icon';icon.setAttribute('aria-hidden','true');icon.textContent=bad?'!':'✓';const text=document.createElement('div');text.className='uf-toast-message';text.textContent=customerFriendlyMessage(message);const close=document.createElement('button');close.type='button';close.className='uf-toast-close';close.setAttribute('aria-label','Tutup notifikasi');close.textContent='×';const progress=document.createElement('span');progress.className='uf-toast-progress';let timer;const remove=()=>{if(timer)clearTimeout(timer);if(!toast.isConnected)return;toast.style.animation='ufToastOut .18s ease forwards';setTimeout(()=>toast.remove(),190);};close.addEventListener('click',remove);toast.append(icon,text,close,progress);host.appendChild(toast);timer=setTimeout(remove,duration);while(host.children.length>4)host.firstElementChild.remove();}
@@ -210,7 +283,65 @@ function shipFields(){const active=$('shipMode')?.value==='Kurir';$('shipExtra')
 function courierChoiceChanged(){const own=$('courierChoice')?.value==='Pihak Ketiga';$('courierStoreFields')?.classList.toggle('hidden',own);$('courierOwnFields')?.classList.toggle('hidden',!own);const name=$('courierName');if(name)name.required=own;updateShipFee()}
 function selectedUwaisTariff(){const id=String($('shipArea')?.value||'');return (catalog.tariffs||[]).find(t=>String(t.id)===id)||null}
 function selectedShippingArea(){const id=String($('shipArea')?.value||'');if(id==='__OTHER__')return String($('shipAreaOther')?.value||'').trim();const t=selectedUwaisTariff();return t?String(t.area||'').trim():''}
-function updateShipFee(){const own=$('courierChoice')?.value==='Pihak Ketiga';const select=$('shipArea');const other=String(select?.value||'')==='__OTHER__';$('shipAreaOtherWrap')?.classList.toggle('hidden',own||!other);const t=selectedUwaisTariff();const automatic=!own&&!!catalog.shippingConfig?.autoByArea&&!!t;const fee=automatic?Math.max(0,Number(t.ongkir)||0):0;const sub=cartRows().reduce((sum,p)=>sum+p.qty*p.harga,0);if(own){if($('feeLine'))$('feeLine').textContent='Kurir diatur sendiri oleh customer. Ongkir kurir dibayar/diatur langsung dengan penyedia kurir dan tidak masuk tagihan Uwais Food.';if($('coTotal'))$('coTotal').textContent=rupiah(sub);if($('coTotalHint'))$('coTotalHint').textContent='Total hanya produk; biaya kurir sendiri tidak termasuk.';return}if(automatic){if($('feeLine'))$('feeLine').textContent=`Ongkir ${esc(t.area)}: ${rupiah(fee)} · ${Number(t.jarakKm)||0} km. Tarif otomatis aktif dan akan dicatat pada pesanan.`}else if(t){if($('feeLine'))$('feeLine').textContent=`Tarif referensi ${esc(t.area)}: ${rupiah(t.ongkir)}. Penghitungan otomatis OFF; nominal final akan dikonfirmasi melalui WhatsApp.`}else if(other){if($('feeLine'))$('feeLine').textContent='Daerah tidak tercantum. Ongkir akan dikonfirmasi melalui WhatsApp.'}else{if($('feeLine'))$('feeLine').textContent='Pilih daerah tujuan dari daftar ongkir Uwais Food.'}if($('coTotal'))$('coTotal').textContent=rupiah(sub+fee);if($('coTotalHint'))$('coTotalHint').textContent=automatic?'Total sementara termasuk ongkir berdasarkan tarif daerah.':'Total sementara belum termasuk ongkir final.'}
+function updateShipFee() {
+  const own = $('courierChoice')?.value === 'Pihak Ketiga';
+  const select = $('shipArea');
+  const other = String(select?.value || '') === '__OTHER__';
+
+  $('shipAreaOtherWrap')?.classList.toggle(
+    'hidden',
+    own || !other
+  );
+
+  const tariff = selectedUwaisTariff();
+
+  const automatic =
+    !own &&
+    catalog.shippingConfig?.autoByArea === true &&
+    !!tariff;
+
+  const fee = automatic
+    ? Math.max(0, Number(tariff.ongkir) || 0)
+    : 0;
+
+  const subtotal = cartRows().reduce(
+    (sum, p) => sum + p.qty * p.harga,
+    0
+  );
+
+  const feeLine = $('feeLine');
+
+  if (feeLine) {
+    if (own) {
+      feeLine.textContent =
+        'Biaya kurir pilihan Anda diatur langsung dengan penyedia kurir.';
+    } else if (automatic) {
+      feeLine.textContent =
+        'Ongkir ' +
+        tariff.area +
+        ': ' +
+        rupiah(fee) +
+        ' · ' +
+        (Number(tariff.jarakKm) || 0) +
+        ' km.';
+    } else {
+      // Informasi panjang tentang ongkir otomatis OFF dihapus.
+      feeLine.textContent = '';
+    }
+  }
+
+  if ($('coTotal')) {
+    $('coTotal').textContent = rupiah(subtotal + fee);
+  }
+
+  if ($('coTotalHint')) {
+    $('coTotalHint').textContent = own
+      ? 'Total belum termasuk biaya kurir pihak ketiga.'
+      : automatic
+        ? 'Total sementara sudah termasuk ongkir.'
+        : 'Total sementara menampilkan subtotal produk.';
+  }
+}
 function qrisMarkup(){const p=catalog.payment||{};if(p.qrisImage)return `<img class="payimg" src="${p.qrisImage}" alt="QRIS Uwais Food" loading="lazy">`;if(paymentQRISLoaded)return p.qrisAvailable===false?'<div class="shipping-help">QRIS belum diatur. Silakan gunakan informasi rekening atau hubungi Uwais Food.</div>':'<div class="shipping-help">Gambar QRIS belum dapat dimuat. Silakan gunakan informasi rekening.</div>';return '<div class="shipping-help qris-lazy-slot">Menyiapkan gambar QRIS saat diperlukan…</div>'}
 async function loadPaymentQRIS(){if(paymentQRISLoaded)return;if(paymentQRISLoading)return paymentQRISLoading;paymentQRISLoading=(async()=>{try{const r=await api('customer_getPaymentInfo');catalog.payment=catalog.payment||{};catalog.payment.qrisImage=String(r?.qrisImage||'');catalog.payment.qrisRevision=String(r?.qrisRevision||catalog.payment.qrisRevision||'');if(r&&typeof r.configured==='boolean')catalog.payment.qrisAvailable=r.configured;paymentQRISLoaded=true;}catch(err){console.warn('QRIS belum dapat dimuat',err.message);catalog.payment=catalog.payment||{};catalog.payment.qrisAvailable=true;paymentQRISLoaded=true;}finally{paymentQRISLoading=null;document.querySelectorAll('.qris-lazy-slot').forEach(el=>{el.outerHTML=qrisMarkup()});const out=$('paymentInfo');if(out&&$('payMode')?.value!=='COD')paymentInfo();}})();return paymentQRISLoading}
 function paymentInfo(){const p=catalog.payment||{};const banks=(p.rekening||[]).map(r=>`<div><b>${esc(r.bank)}</b> · ${esc(r.noRek)}<br><span class="muted">a.n. ${esc(r.atasNama)}</span></div>`).join('<hr style="border:0;border-top:1px solid var(--line);margin:8px 0">');const out=$('paymentInfo');if(!out)return;if($('payMode')?.value==='COD'){out.innerHTML='<div class="shipping-help">Pembayaran dilakukan saat mengambil pesanan atau saat pesanan diterima.</div>';return}out.innerHTML=`<div class="pay-instructions">${banks||'<div>Informasi rekening belum tersedia. Silakan hubungi Uwais Food melalui WhatsApp.</div>'}${qrisMarkup()}</div>`;if(!paymentQRISLoaded)loadPaymentQRIS()}
@@ -231,6 +362,517 @@ function showHomePage(){$('trackPage').classList.add('hidden');$('homePage').cla
 function openAccount(){modal(`<button class="close" onclick="closeModal()">Tutup</button><h2>Akun pelanggan</h2><div class="tabs"><button id="aLogin" onclick="accountMode('login')">Login</button><button class="secondary" id="aReg" onclick="accountMode('register')">Daftar akun</button></div><div id="regName" class="field hidden"><label>Nama</label><input id="aNama" placeholder="Nama lengkap"></div><div class="field"><label>Nomor WhatsApp</label><input id="aHp" inputmode="tel" placeholder="08xxxxxxxxxx"></div><div class="field"><label>Kata sandi</label><input id="aPass" type="password" placeholder="Minimal 10 karakter"></div><button style="width:100%" onclick="accountSubmit()">Lanjutkan</button><div id="aError"></div>`);accountMode('login')}
 let accountAction='login';function accountMode(m){accountAction=m;$('aLogin').className=m==='login'?'':'secondary';$('aReg').className=m==='register'?'':'secondary';$('regName').classList.toggle('hidden',m!=='register')}
 async function accountSubmit(){const out=$('aError');try{const p={hp:normalizeCustomerPhone($('aHp').value),nama:$('aNama')?.value||'',password:$('aPass').value};$('aHp').value=p.hp;const r=await api(accountAction==='login'?'customer_login':'customer_register',[p]);token=r.token;customer=r.customer;localStorage.setItem('uf_customer_token',token);closeModal();notify('Berhasil masuk sebagai '+customer.nama)}catch(e){out.className='notice error';out.textContent=customerFriendlyMessage(e)}}
+  /* =========================================================
+   UWAIS FOOD CUSTOMER PWA v11.11.5
+   CHECKOUT ENGINE FIX
+   ========================================================= */
+
+let pendingCheckoutRequestId = '';
+let pendingCheckoutFingerprint = '';
+
+function checkoutShowError(message) {
+  const text = customerFriendlyMessage(message);
+
+  const output = $('coError');
+
+  if (output) {
+    output.className = 'notice error';
+    output.textContent = text;
+  }
+
+  notify(text, true);
+}
+
+function checkoutRequestId_(fingerprint) {
+  if (
+    !pendingCheckoutRequestId ||
+    pendingCheckoutFingerprint !== fingerprint
+  ) {
+    pendingCheckoutFingerprint = fingerprint;
+
+    const random = window.crypto &&
+      typeof window.crypto.randomUUID === 'function'
+      ? window.crypto.randomUUID().replace(/-/g, '')
+      : Math.random().toString(36).slice(2) +
+        Math.random().toString(36).slice(2);
+
+    pendingCheckoutRequestId =
+      'CP' + Date.now().toString(36) + random;
+  }
+
+  return pendingCheckoutRequestId;
+}
+
+function openTrackForOrder(id, hp) {
+  closeModal();
+  showTrackPage();
+
+  if ($('trackHp')) $('trackHp').value = hp;
+  if ($('trackId')) $('trackId').value = id;
+
+  trackOrder();
+}
+
+function showOrderSuccessModal(order) {
+  const id = String(order.id || '');
+  const hp = String(order.hp || '');
+  const payment = String(
+    order.metodeBayar || order.payment || 'QRIS/Transfer'
+  );
+  const bayar = String(order.bayar || 'Belum Bayar');
+
+  const ownCourier = order.jenisKurir === 'Pihak Ketiga';
+
+  const shippingFee = ownCourier
+    ? 'Diatur langsung oleh customer'
+    : (
+        order.ongkirPending || order.ongkir == null
+          ? 'Menunggu konfirmasi'
+          : rupiah(order.ongkir)
+      );
+
+  const total = order.total == null
+    ? 'Menunggu konfirmasi ongkir'
+    : rupiah(order.total);
+
+  const shippingLabel =
+    order.metodeKirim === 'Kurir'
+      ? (ownCourier ? 'Kurir sendiri' : 'Kurir Uwais Food')
+      : 'Pickup / Ambil sendiri';
+
+  modal(`
+    <button class="close" onclick="closeModal()">Tutup</button>
+
+    <div style="text-align:center;padding:12px 0 18px">
+      <div style="
+        width:66px;
+        height:66px;
+        display:grid;
+        place-items:center;
+        margin:0 auto 15px;
+        border-radius:50%;
+        background:#dceee3;
+        color:#176b4a;
+        font-size:34px;
+        font-weight:900
+      ">✓</div>
+
+      <h2 style="margin-bottom:8px">
+        Pesanan berhasil dikirim!
+      </h2>
+
+      <p class="muted" style="font-size:13px;line-height:1.6">
+        Pesanan Anda sudah diterima oleh sistem Uwais Food.
+        Simpan nomor pesanan berikut untuk melakukan pelacakan.
+      </p>
+    </div>
+
+    <div class="pay-instructions">
+      <div class="muted">Nomor pesanan</div>
+
+      <div style="
+        font:800 20px 'Plus Jakarta Sans',sans-serif;
+        color:var(--brand-strong);
+        margin:7px 0 14px;
+        overflow-wrap:anywhere
+      ">${esc(id)}</div>
+
+      <div class="row">
+        <span>Nama pelanggan</span>
+        <b>${esc(order.nama || '-')}</b>
+      </div>
+
+      <div class="row" style="margin-top:9px">
+        <span>Pengiriman</span>
+        <b>${esc(shippingLabel)}</b>
+      </div>
+
+      <div class="row" style="margin-top:9px">
+        <span>Subtotal produk</span>
+        <b>${rupiah(order.subtotal)}</b>
+      </div>
+
+      <div class="row" style="margin-top:9px">
+        <span>Ongkos kirim</span>
+        <b>${esc(shippingFee)}</b>
+      </div>
+
+      <div class="divider" style="
+        border-top:1px solid var(--line);
+        margin:13px 0
+      "></div>
+
+      <div class="row">
+        <b>Total</b>
+        <b class="total">${esc(total)}</b>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <span>Pembayaran</span>
+        <b>${esc(payment)}</b>
+      </div>
+
+      <div class="row" style="margin-top:9px">
+        <span>Status</span>
+        <span class="status">${esc(bayar)}</span>
+      </div>
+    </div>
+
+    <button
+      style="width:100%;margin-top:12px"
+      onclick="openPaymentStatus(
+        '${esc(id)}',
+        '${esc(hp)}',
+        '${esc(payment)}',
+        '${esc(bayar)}',
+        false
+      )"
+    >
+      Lihat informasi pembayaran
+    </button>
+
+    <button
+      class="secondary"
+      style="width:100%;margin-top:9px"
+      onclick="openTrackForOrder('${esc(id)}','${esc(hp)}')"
+    >
+      Lacak pesanan
+    </button>
+
+    <button
+      style="width:100%;margin-top:9px;background:#176b4a"
+      onclick="notifyWhatsApp('${esc(id)}','${esc(hp)}')"
+    >
+      Konfirmasi melalui WhatsApp
+    </button>
+  `);
+}
+
+async function submitOrder() {
+
+  // Mencegah klik berulang.
+  if (isSubmittingOrder) return;
+
+  if (!poOpen()) {
+    checkoutShowError(
+      'Periode PO sudah ditutup. Silakan pilih PO yang masih dibuka.'
+    );
+    return;
+  }
+
+  // Ambil data checkout.
+  const nama = String($('coNama')?.value || '').trim();
+  const hp = normalizeCustomerPhone($('coHp')?.value || '');
+
+  if (!nama) {
+    checkoutShowError('Nama pemesan wajib diisi.');
+    $('coNama')?.focus();
+    return;
+  }
+
+  if (!/^08\d{8,13}$/.test(hp)) {
+    checkoutShowError(
+      'Nomor WhatsApp tidak valid. Gunakan format 08xxxxxxxxxx.'
+    );
+    $('coHp')?.focus();
+    return;
+  }
+
+  $('coHp').value = hp;
+
+  // Validasi PO.
+  const poId = String(
+    selectedPOId ||
+    catalog.selectedPO?.id ||
+    catalog.orderAvailability?.po?.id ||
+    ''
+  );
+
+  if (!poId) {
+    checkoutShowError(
+      'Periode PO belum dipilih. Silakan pilih PO terlebih dahulu.'
+    );
+    return;
+  }
+
+  // Validasi keranjang.
+  const items = cartRows();
+
+  if (!items.length) {
+    checkoutShowError('Keranjang masih kosong.');
+    return;
+  }
+
+  if (!isCartStockValid(items)) {
+    checkoutShowError(
+      'Stok tidak mencukupi. Silakan kurangi jumlah pesanan.'
+    );
+    return;
+  }
+
+  // Ambil metode pembayaran.
+  const payment = $('payMode')?.value === 'COD'
+    ? 'COD'
+    : 'QRIS/Transfer';
+
+  // Ambil metode pengiriman.
+  const shippingMode = $('shipMode')?.value === 'Kurir'
+    ? 'Kurir'
+    : 'Pickup';
+
+  let shipping = {
+    metode: shippingMode
+  };
+
+  if (shippingMode === 'Kurir') {
+
+    const address = String(
+      $('shipAddress')?.value || ''
+    ).trim().slice(0, 500);
+
+    if (!address) {
+      checkoutShowError(
+        'Detail alamat tujuan wajib diisi untuk pengiriman kurir.'
+      );
+      $('shipAddress')?.focus();
+      return;
+    }
+
+    const courierChoice = String(
+      $('courierChoice')?.value || 'Toko'
+    );
+
+    if (courierChoice === 'Pihak Ketiga') {
+
+      const courierName = String(
+        $('courierName')?.value || ''
+      ).trim();
+
+      if (!courierName) {
+        checkoutShowError(
+          'Nama layanan kurir pilihan Anda wajib diisi.'
+        );
+        $('courierName')?.focus();
+        return;
+      }
+
+      shipping = {
+        metode: 'Kurir',
+        pilihanKurir: 'Pihak Ketiga',
+        namaKurir: courierName,
+        detailAlamat: address
+      };
+
+    } else {
+
+      const areaValue = String(
+        $('shipArea')?.value || ''
+      );
+
+      const isOtherArea = areaValue === '__OTHER__';
+
+      const area = isOtherArea
+        ? String($('shipAreaOther')?.value || '').trim()
+        : selectedShippingArea();
+
+      if (!areaValue || !area) {
+        checkoutShowError(
+          'Pilih atau masukkan daerah tujuan pengiriman terlebih dahulu.'
+        );
+
+        if (isOtherArea) {
+          $('shipAreaOther')?.focus();
+        } else {
+          $('shipArea')?.focus();
+        }
+
+        return;
+      }
+
+      if (!isOtherArea && !selectedUwaisTariff()) {
+        checkoutShowError(
+          'Tarif pengiriman tidak ditemukan. Silakan muat ulang katalog.'
+        );
+        return;
+      }
+
+      shipping = {
+        metode: 'Kurir',
+        pilihanKurir: 'Toko',
+        area: area,
+        areaPilihanLain: isOtherArea,
+        detailAlamat: address
+      };
+    }
+  }
+
+  // Jika menggunakan akun, pastikan nomor HP sesuai akun login.
+  let customerToken = '';
+
+  if (coMode === 'account') {
+
+    if (!customer || !token) {
+      checkoutShowError(
+        'Silakan login ke akun pelanggan terlebih dahulu.'
+      );
+      return;
+    }
+
+    const accountHp = normalizeCustomerPhone(customer.hp);
+
+    if (accountHp !== hp) {
+      checkoutShowError(
+        'Nomor WhatsApp checkout harus sama dengan nomor akun pelanggan.'
+      );
+      return;
+    }
+
+    customerToken = token;
+  }
+
+  const note = String(
+    $('coNote')?.value || ''
+  ).trim().slice(0, 500);
+
+  // Harga final selalu diverifikasi kembali oleh server.
+  const orderItems = items.map(p => ({
+    nama: p.nama,
+    qty: Number(p.qty)
+  }));
+
+  const payload = {
+    selectedPOId: poId,
+    poId: poId,
+    nama: nama,
+    hp: hp,
+    items: orderItems,
+    payment: payment,
+    shipping: shipping,
+    note: note
+  };
+
+  // Kunci idempotensi: retry dengan data sama tidak membuat order ganda.
+  const fingerprint = JSON.stringify({
+    poId: poId,
+    nama: nama,
+    hp: hp,
+    items: orderItems,
+    payment: payment,
+    shipping: shipping,
+    note: note
+  });
+
+  payload.clientRequestId = checkoutRequestId_(fingerprint);
+
+  // Mulai proses pengiriman.
+  isSubmittingOrder = true;
+
+  const button = $('checkoutSubmitBtn');
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Mengirim pesanan...';
+  }
+
+  showOrderProcessingDialog();
+
+  try {
+
+    const result = await api(
+      'customer_createOrder',
+      [payload, customerToken]
+    );
+
+    if (!result || !result.id) {
+      throw new Error(
+        'Server tidak memberikan nomor pesanan. Periksa kembali status pesanan sebelum mengirim ulang.'
+      );
+    }
+
+    // Simpan data order terakhir untuk pembayaran, WhatsApp dan pelacakan.
+    const finalItems = Array.isArray(result.items) && result.items.length
+      ? result.items
+      : items.map(p => ({
+          nama: p.nama,
+          qty: Number(p.qty),
+          harga: Number(p.harga)
+        }));
+
+    lastOrder = Object.assign({}, result, {
+      id: String(result.id),
+      nama: String(result.nama || nama),
+      hp: hp,
+
+      payment: String(result.payment || payment),
+      metodeBayar: String(result.metodeBayar || result.payment || payment),
+      bayar: String(result.bayar || 'Belum Bayar'),
+
+      shipping: String(result.shipping || shippingMode),
+      metodeKirim: String(result.metodeKirim || shippingMode),
+
+      status: String(result.status || 'Baru'),
+      items: finalItems,
+
+      subtotal: Number(
+        result.subtotal != null
+          ? result.subtotal
+          : items.reduce((s, p) => s + p.qty * p.harga, 0)
+      ),
+
+      waktu: String(
+        result.waktu ||
+        new Date().toLocaleString('id-ID')
+      )
+    });
+
+    // Checkout sukses. Bersihkan keranjang hanya setelah server
+    // benar-benar mengembalikan nomor pesanan.
+    cart = {};
+
+    pendingCheckoutRequestId = '';
+    pendingCheckoutFingerprint = '';
+
+    updateCart();
+    renderProducts();
+
+    hideOrderProcessingDialog();
+
+    isSubmittingOrder = false;
+
+    showOrderSuccessModal(lastOrder);
+
+    notify(
+      'Pesanan berhasil dikirim. Nomor pesanan: ' + lastOrder.id
+    );
+
+  } catch (error) {
+
+    hideOrderProcessingDialog();
+
+    isSubmittingOrder = false;
+
+    const message = customerFriendlyMessage(error);
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Kirim pesanan';
+    }
+
+    const output = $('coError');
+
+    if (output) {
+      output.className = 'notice error';
+      output.textContent = message;
+    }
+
+    notify(message, true);
+
+    console.error(
+      '[UWAIS CUSTOMER CHECKOUT ERROR]',
+      error
+    );
+  }
+}
 init();updateCart();setInterval(refreshCatalog,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshCatalog()});
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 </script></body></html>
