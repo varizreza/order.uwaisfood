@@ -1,9 +1,6 @@
-/* UWAIS FOOD ADMIN PWA — v11.11.5 Hide Customer + Order Notes + Receipt Optimization
- * Network-first navigation, versioned app shell, user-approved update activation.
- * API requests use POST and are never cached.
- */
-const CACHE_PREFIX = 'uwais-food-admin-shell-';
-const CACHE_NAME = CACHE_PREFIX + 'v11-11-5-20261120-admin-hide-note-receipt-v2';
+/* UWAIS FOOD CUSTOMER PWA v11.11.5 — paginated catalog + refresh dedupe */
+const CACHE_PREFIX = 'uwais-food-shell-';
+const CACHE_NAME = CACHE_PREFIX + 'v11-11-5-20261120-catalog-paging-refresh-dedupe';
 const SHELL_FILES = [
   './',
   './index.html',
@@ -25,8 +22,10 @@ self.addEventListener('install', event => {
       try {
         const response = await fetch(url, { cache: 'reload' });
         if (response && response.ok) await cache.put(url, response.clone());
-      } catch (_) { /* Online launch will populate the shell cache. */ }
+      } catch (_) { /* First online launch will populate the cache. */ }
     }));
+    // On first installation there is no active worker to wait for; on update, let
+    // the app's existing update prompt control SKIP_WAITING as before.
   })());
 });
 
@@ -37,9 +36,7 @@ self.addEventListener('message', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(key =>
-      (key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME) || key.startsWith('uwais-food-shell-')
-    ).map(key => caches.delete(key)));
+    await Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map(key => caches.delete(key)));
     await self.clients.claim();
   })());
 });
@@ -61,9 +58,11 @@ self.addEventListener('fetch', event => {
         return response;
       } catch (_) {
         const cache = await caches.open(CACHE_NAME);
-        return (await cache.match(request)) || (await cache.match(scopedUrl('./index.html'))) ||
-          new Response('Uwais Food Admin sedang offline. Hubungkan internet untuk memuat versi terbaru.', {
-            status: 503, headers: {'Content-Type': 'text/plain; charset=utf-8'}
+        return (await cache.match(request)) ||
+          (await cache.match(scopedUrl('./index.html'))) ||
+          new Response('Uwais Food sedang offline. Hubungkan internet untuk memuat aplikasi pertama kali.', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
           });
       }
     })());
@@ -79,24 +78,23 @@ self.addEventListener('fetch', event => {
       if (response && response.ok) await cache.put(request, response.clone());
       return response;
     } catch (_) {
-      return new Response('', {status: 504, statusText: 'Offline'});
+      return new Response('', { status: 504, statusText: 'Offline' });
     }
   })());
 });
 
+
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   event.waitUntil((async () => {
-    const windows = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
+    const windows = await self.clients.matchAll({type:'window', includeUncontrolled:true});
     for (const client of windows) {
       if ('focus' in client) {
         await client.focus();
-        try { client.postMessage({type: 'customer-order-notification'}); } catch (_) {}
+        try { client.postMessage({type:'customer-order-notification'}); } catch (_) {}
         return;
       }
     }
-    if (self.clients.openWindow) {
-      return self.clients.openWindow(new URL('./', self.registration.scope).toString());
-    }
+    if (self.clients.openWindow) return self.clients.openWindow(new URL('./', self.registration.scope).toString());
   })());
 });
